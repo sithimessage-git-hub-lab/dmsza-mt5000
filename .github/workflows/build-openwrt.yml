@@ -47,12 +47,18 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # 加载自定义配置（如果有 .config 文件会使用它，否则使用默认配置）
+      # 加载自定义配置并设置 GL-MT5000 目标设备
       - name: Load custom configuration
         run: |
           [ -e files ] && mv files openwrt/files
           [ -e .config ] && cp .config openwrt/.config
           cd openwrt
+          
+          # 设置 GL-MT5000 目标设备配置
+          echo "CONFIG_TARGET_mediatek=y" >> .config
+          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
+          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y" >> .config
+          
           make defconfig
 
       # 预下载编译所需的依赖包
@@ -64,7 +70,7 @@ jobs:
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
-      # 开始编译固件（-j4 使用 4 线程编译，如果失败则使用单线程并输出详细日志）
+      # 开始编译固件（使用多线程编译，如果失败则使用单线程并输出详细日志）
       - name: Compile the firmware
         run: |
           cd openwrt
@@ -78,7 +84,7 @@ jobs:
         run: |
           cd openwrt
           echo "=== 检查 bin/targets 目录 ==="
-          find bin/targets -type f -name "*.bin" -o -type f -name "*.img" -o -type f -name "*.gz" | tee /tmp/firmware-list.txt
+          find bin/targets -type f -name "*.bin" -o -type f -name "*.img" -o -type f -name "*.itb" -o -type f -name "*.gz" | tee /tmp/firmware-list.txt
           echo "=== 固件文件列表 ==="
           cat /tmp/firmware-list.txt
           
