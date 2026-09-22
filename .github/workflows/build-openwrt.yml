@@ -79,12 +79,12 @@ jobs:
           make -j$(nproc) || make -j1 || make -j1 V=s
           echo "编译结束：$(date)"
 
-      # 查找编译生成的固件文件
+      # 查找编译生成的固件文件（只查找 .bin）
       - name: Find firmware files
         run: |
           cd openwrt
           echo "=== 检查 bin/targets 目录 ==="
-          find bin/targets -type f -name "*.bin" -o -type f -name "*.img" -o -type f -name "*.itb" -o -type f -name "*.gz" | tee /tmp/firmware-list.txt
+          find bin/targets -type f -name "*.bin" | tee /tmp/firmware-list.txt
           echo "=== 固件文件列表 ==="
           cat /tmp/firmware-list.txt
           
@@ -97,20 +97,20 @@ jobs:
             echo "FIRMWARE_FOUND=false" >> $GITHUB_ENV
           fi
 
-      # 上传固件到 GitHub Actions Artifacts
+      # 上传固件到 GitHub Actions Artifacts（只上传 .bin 文件）
       - name: Upload firmware
         if: env.FIRMWARE_FOUND == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: mt5000-firmware-${{ github.run_number }}
-          path: openwrt/bin/targets/**/*
+          path: openwrt/bin/targets/**/*.bin
           if-no-files-found: error
 
       # 如果没有生成固件，显示帮助信息
       - name: Show help if no firmware
         if: env.FIRMWARE_FOUND == 'false'
         run: |
-          echo "❌ 固件编译失败或未生成固件文件"
+          echo "❌ 固件编译失败或未生成 .bin 固件文件"
           echo "请检查编译日志，特别关注以下内容："
           echo "1. 是否正确选择了目标设备（MediaTek Filogic -> GL.iNet MT5000）"
           echo "2. 检查 .config 文件中是否有 CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y"
