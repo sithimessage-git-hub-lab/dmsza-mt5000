@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 检出你的仓库代码
+      # 检出你的仓库代码（包含 .config 和 files/）
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -47,63 +47,15 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # 加载自定义配置并设置 GL-MT5000 目标设备及 LuCI
+      # 加载自定义配置（使用仓库根目录下的 .config 文件）
       - name: Load custom configuration
         run: |
-          [ -e files ] && mv files openwrt/files
-          [ -e .config ] && cp .config openwrt/.config
+          # 如果有自定义文件目录，复制到 openwrt
+          [ -e files ] && cp -r files openwrt/files || true
+          # 使用仓库根目录的 .config 文件
+          [ -e .config ] && cp .config openwrt/.config || echo "warning: no .config file found"
+          
           cd openwrt
-          
-          # 设置 GL-MT5000 目标设备配置
-          echo "CONFIG_TARGET_mediatek=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
-          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y" >> .config
-          
-          # ---------- 添加 LuCI Web 界面 ----------
-          # LuCI 基础组件
-          echo "CONFIG_PACKAGE_luci=y" >> .config
-          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
-          echo "CONFIG_PACKAGE_luci-compat=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-base=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-ip=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-jsonc=y" >> .config
-          echo "CONFIG_PACKAGE_luci-lib-nixio=y" >> .config
-          
-          # LuCI 标准主题
-          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
-          
-          # LuCI 常用页面模块
-          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
-          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
-          
-          # LuCI 基本功能页面
-          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
-          echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
-          
-          # LuCI 默认首页
-          echo "CONFIG_PACKAGE_luci-base=y" >> .config
-          
-          # 简体中文语言包（可选）
-          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
-          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
-                    
-          # ---------- 添加 WireGuard 支持 ----------
-          # WireGuard 内核模块（必需）
-          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
-          # WireGuard 命令行工具（可选但推荐，包含 wg 和 wg-quick 命令）
-          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
-          # LuCI 的 WireGuard 管理界面（可选）
-          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
-          # LuCI WireGuard 中文语言包（可选）
-          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
-          
-          # 重要：禁用 .itb 格式，只生成 .bin 格式
-          echo "CONFIG_TARGET_IMAGES_GZIP=y" >> .config
-          
           make defconfig
 
       # 预下载编译所需的依赖包
@@ -115,7 +67,7 @@ jobs:
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
-      # 开始编译固件（使用多线程编译，如果失败则使用单线程并输出详细日志）
+      # 开始编译固件
       - name: Compile the firmware
         run: |
           cd openwrt
@@ -147,7 +99,7 @@ jobs:
         if: env.FIRMWARE_FOUND == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mt5000-firmware-luci-${{ github.run_number }}
+          name: mt5000-firmware-${{ github.run_number }}
           path: openwrt/bin/targets/**/*.bin
           if-no-files-found: error
 
@@ -156,7 +108,4 @@ jobs:
         if: env.FIRMWARE_FOUND == 'false'
         run: |
           echo "❌ 固件编译失败或未生成 .bin 固件文件"
-          echo "请检查编译日志，特别关注以下内容："
-          echo "1. 是否正确选择了目标设备（MediaTek Filogic -> GL.iNet MT5000）"
-          echo "2. 检查 .config 文件中是否有 CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y"
-          echo "3. 查看编译日志中的错误信息"
+          echo "请检查编译日志"
