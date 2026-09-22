@@ -90,6 +90,16 @@ jobs:
           echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
           echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+                    
+          # ---------- 添加 WireGuard 支持 ----------
+          # WireGuard 内核模块（必需）
+          echo "CONFIG_PACKAGE_kmod-wireguard=y" >> .config
+          # WireGuard 命令行工具（可选但推荐，包含 wg 和 wg-quick 命令）
+          echo "CONFIG_PACKAGE_wireguard-tools=y" >> .config
+          # LuCI 的 WireGuard 管理界面（可选）
+          echo "CONFIG_PACKAGE_luci-app-wireguard=y" >> .config
+          # LuCI WireGuard 中文语言包（可选）
+          echo "CONFIG_PACKAGE_luci-i18n-wireguard-zh-cn=y" >> .config
           
           # 重要：禁用 .itb 格式，只生成 .bin 格式
           echo "CONFIG_TARGET_IMAGES_GZIP=y" >> .config
