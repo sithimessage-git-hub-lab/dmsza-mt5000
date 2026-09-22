@@ -1,30 +1,21 @@
 name: Build OpenWrt for GL-MT5000
 
-# 触发条件：手动触发（推荐）或推送到 main 分支
+# 触发条件：手动触发（推荐）
 on:
-  workflow_dispatch:      # 允许手动触发，便于你随时编译
+  workflow_dispatch:
   push:
     branches: [ "main" ]
 
-env:
-  # 远程 OpenWrt 源码仓库地址与分支
-  REPO_URL: https://github.com/dmsza/openwrt.git
-  REPO_BRANCH: openwrt-25.12-mt5000
-  # 是否上传固件到 GitHub Releases
-  UPLOAD_RELEASE: false
-  # 编译环境时区
-  TZ: Asia/Shanghai
-
 jobs:
   build:
-    runs-on: ubuntu-latest   # 使用最新的 Ubuntu 虚拟环境
+    runs-on: ubuntu-latest
 
     steps:
-      # 检出你的仓库代码（用于读取 .config 等配置文件）
+      # 检出你的仓库代码
       - name: Checkout
         uses: actions/checkout@v4
 
-      # 清理系统环境，释放磁盘空间（节省空间，推荐保留）
+      # 清理系统环境，释放磁盘空间
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
         with:
@@ -37,7 +28,6 @@ jobs:
           swap-storage: true
 
       # 安装编译 OpenWrt 所需的基础依赖库
-      # 注意：不要安装 python3-distutils！在 Ubuntu 24.04 中该包已不存在
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -45,11 +35,10 @@ jobs:
           gcc-multilib g++-multilib gettext git libncurses5-dev \
           libssl-dev python3 python3-setuptools rsync unzip zlib1g-dev file wget
 
-      # 克隆 OpenWrt 源码（使用 env 中指定的仓库和分支）
+      # 克隆 OpenWrt 源码并切换到 openwrt-25.12-mt5000 分支
       - name: Clone source code
         run: |
-          git clone $REPO_URL -b $REPO_BRANCH openwrt
-          ln -sf /home/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/openwrt $GITHUB_WORKSPACE/openwrt
+          git clone https://github.com/dmsza/openwrt.git -b openwrt-25.12-mt5000 openwrt
 
       # 更新 feeds（OpenWrt 的软件包源）
       - name: Update feeds
@@ -58,8 +47,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # 加载自定义配置（如果你在仓库根目录有 .config 文件，会使用它）
-      # 如果没有 .config 文件，则使用默认配置
+      # 加载自定义配置（如果有 .config 文件会使用它，否则使用默认配置）
       - name: Load custom configuration
         run: |
           [ -e files ] && mv files openwrt/files
@@ -67,33 +55,57 @@ jobs:
           cd openwrt
           make defconfig
 
-      # 预下载编译所需的依赖包，避免编译中途因网络问题失败
+      # 预下载编译所需的依赖包
       - name: Download package
         run: |
           cd openwrt
           make download -j8
-          # 检查并清理下载失败的空文件（通常小于 1KB）
+          # 清理下载失败的空文件（通常小于 1KB）
           find dl -size -1024c -exec ls -l {} \;
           find dl -size -1024c -exec rm -f {} \;
 
-      # 开始编译固件
-      # -j$(nproc) 使用所有 CPU 核心加速编译
-      # 如果失败，会尝试单线程编译并输出详细日志（V=s）
+      # 开始编译固件（-j4 使用 4 线程编译，如果失败则使用单线程并输出详细日志）
       - name: Compile the firmware
         run: |
           cd openwrt
-          echo -e "$(nproc) thread compile"
+          echo "编译开始：$(date)"
+          echo "使用 $(nproc) 线程编译"
           make -j$(nproc) || make -j1 || make -j1 V=s
-          echo "status=success" >> $GITHUB_OUTPUT
-          # 获取设备名称，用于后续文件命名
-          grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-          [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+          echo "编译结束：$(date)"
 
-      # 上传编译产物（.bin 固件文件）到 GitHub Actions Artifacts
-      - name: Upload firmware to Artifacts
+      # 查找编译生成的固件文件
+      - name: Find firmware files
+        run: |
+          cd openwrt
+          echo "=== 检查 bin/targets 目录 ==="
+          find bin/targets -type f -name "*.bin" -o -type f -name "*.img" -o -type f -name "*.gz" | tee /tmp/firmware-list.txt
+          echo "=== 固件文件列表 ==="
+          cat /tmp/firmware-list.txt
+          
+          # 检查是否有固件文件
+          if [ -s /tmp/firmware-list.txt ]; then
+            echo "✅ 固件文件已生成"
+            echo "FIRMWARE_FOUND=true" >> $GITHUB_ENV
+          else
+            echo "❌ 未找到固件文件"
+            echo "FIRMWARE_FOUND=false" >> $GITHUB_ENV
+          fi
+
+      # 上传固件到 GitHub Actions Artifacts
+      - name: Upload firmware
+        if: env.FIRMWARE_FOUND == 'true'
         uses: actions/upload-artifact@v4
-        if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
         with:
-          name: OpenWrt${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
-          path: openwrt/bin/targets/**
+          name: mt5000-firmware-${{ github.run_number }}
+          path: openwrt/bin/targets/**/*
+          if-no-files-found: error
+
+      # 如果没有生成固件，显示帮助信息
+      - name: Show help if no firmware
+        if: env.FIRMWARE_FOUND == 'false'
+        run: |
+          echo "❌ 固件编译失败或未生成固件文件"
+          echo "请检查编译日志，特别关注以下内容："
+          echo "1. 是否正确选择了目标设备（MediaTek Filogic -> GL.iNet MT5000）"
+          echo "2. 检查 .config 文件中是否有 CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y"
+          echo "3. 查看编译日志中的错误信息"
