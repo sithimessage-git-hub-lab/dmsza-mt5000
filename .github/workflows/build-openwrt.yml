@@ -47,7 +47,7 @@ jobs:
           ./scripts/feeds update -a
           ./scripts/feeds install -a
 
-      # 加载自定义配置并设置 GL-MT5000 目标设备
+      # 加载自定义配置并设置 GL-MT5000 目标设备及 LuCI
       - name: Load custom configuration
         run: |
           [ -e files ] && mv files openwrt/files
@@ -58,6 +58,41 @@ jobs:
           echo "CONFIG_TARGET_mediatek=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic=y" >> .config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_glinet_gl-mt5000=y" >> .config
+          
+          # ---------- 添加 LuCI Web 界面 ----------
+          # LuCI 基础组件
+          echo "CONFIG_PACKAGE_luci=y" >> .config
+          echo "CONFIG_PACKAGE_luci-ssl=y" >> .config
+          echo "CONFIG_PACKAGE_luci-compat=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-base=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-ip=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-jsonc=y" >> .config
+          echo "CONFIG_PACKAGE_luci-lib-nixio=y" >> .config
+          
+          # LuCI 标准主题
+          echo "CONFIG_PACKAGE_luci-theme-bootstrap=y" >> .config
+          
+          # LuCI 常用页面模块
+          echo "CONFIG_PACKAGE_luci-mod-admin-full=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-network=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-status=y" >> .config
+          echo "CONFIG_PACKAGE_luci-mod-system=y" >> .config
+          
+          # LuCI 基本功能页面
+          echo "CONFIG_PACKAGE_luci-app-firewall=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-opkg=y" >> .config
+          echo "CONFIG_PACKAGE_luci-app-upnp=y" >> .config
+          
+          # LuCI 默认首页
+          echo "CONFIG_PACKAGE_luci-base=y" >> .config
+          
+          # 简体中文语言包（可选）
+          echo "CONFIG_PACKAGE_luci-i18n-base-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y" >> .config
+          echo "CONFIG_PACKAGE_luci-i18n-opkg-zh-cn=y" >> .config
+          
+          # 重要：禁用 .itb 格式，只生成 .bin 格式
+          echo "CONFIG_TARGET_IMAGES_GZIP=y" >> .config
           
           make defconfig
 
@@ -102,7 +137,7 @@ jobs:
         if: env.FIRMWARE_FOUND == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: mt5000-firmware-${{ github.run_number }}
+          name: mt5000-firmware-luci-${{ github.run_number }}
           path: openwrt/bin/targets/**/*.bin
           if-no-files-found: error
 
