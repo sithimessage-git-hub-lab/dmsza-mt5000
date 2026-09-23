@@ -100,7 +100,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mt5000-firmware-${{ github.run_number }}
-          path: openwrt/bin/targets/**/*.bin
+      #     path: openwrt/bin/targets/**/*.bin
+          path: openwrt/bin/targets/**
           if-no-files-found: error
 
       # 如果没有生成固件，显示帮助信息
